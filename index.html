@@ -721,6 +721,18 @@
     document.getElementById('invest-input').addEventListener('input', updateCalculator);
     document.getElementById('calc-currency-select').addEventListener('change', updateCalculator);
 
+    // Use corsproxy.io to bypass CoinGecko CORS restrictions on GitHub Pages
+    const PROXY = 'https://corsproxy.io/?';
+    const API = 'https://api.coingecko.com/api/v3';
+
+    async function fetchWithFallback(url) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) return res;
+      } catch (e) { /* direct failed, try proxy */ }
+      return fetch(PROXY + encodeURIComponent(url));
+    }
+
     async function fetchPrices() {
       document.querySelectorAll('.card').forEach(c => c.classList.add('loading'));
 
@@ -729,8 +741,8 @@
         const currCodes = currencies.map(c => c.code).join(',');
 
         const [resUSD, resMulti] = await Promise.all([
-          fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`),
-          fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${stableIds.join(',')}&vs_currencies=${currCodes}`)
+          fetchWithFallback(`${API}/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`),
+          fetchWithFallback(`${API}/simple/price?ids=${stableIds.join(',')}&vs_currencies=${currCodes}`)
         ]);
 
         if (!resUSD.ok) throw new Error(`HTTP ${resUSD.status}`);
