@@ -1,0 +1,84 @@
+PROJECT SUMMARY: Crypto Price Tracker & Arbitrage
+===================================================
+
+1. PROJECT CONCEPT
+-------------------
+A real-time cryptocurrency price tracker and stablecoin arbitrage detector. Tracks Bitcoin, Ethereum, Solana prices and monitors USDT, USDC, DAI stablecoins across 20 global currencies to find profitable arbitrage opportunities. Built as a single static HTML file — no backend, no installation, runs entirely in the browser.
+
+2. HOW IT WAS BUILT
+--------------------
+Tech stack:
+- Single HTML file with embedded CSS and vanilla JavaScript
+- No frameworks (no React, Vue, etc.) — pure browser-native code
+- Client-side only — all logic runs in the user's browser
+- Auto-refreshes every 30 seconds via setInterval
+
+Architecture:
+- index.html — light mode version
+- crypto-tracker.html — dark mode version
+- Fetches live prices from CoinGecko API
+- Calculates arbitrage spreads, deducts realistic fees, shows net profit
+- Responsive card-based layout with hover animations
+
+Features:
+- Live price cards for BTC, ETH, SOL with 24h change, market cap, 24h high
+- Stablecoin tracking with peg status indicator (ON PEG / DEPEG)
+- USD arbitrage detection — finds cheapest and most expensive stablecoin pair
+- Multi-currency arbitrage leaderboard across 20 currencies, ranked by profitability
+- Currency detail breakdown with local currency profit calculation
+- Interactive profit calculator — input investment amount, see net profit after fees
+- Realistic fee structure: buy 0.10%, swap 0.05%, sell 0.10%, network 0.02%, FX spread 0.03% (total 0.30%)
+
+3. DATABASE STRUCTURE
+---------------------
+None — no database. All data is fetched live from APIs and processed in-browser. No data is stored.
+
+4. DATA SOURCES
+---------------
+- CoinGecko API — live cryptocurrency prices, market data, multi-currency rates
+
+5. APIs & COSTS
+----------------
+- CoinGecko Markets API — FREE, no API key needed
+  URL: api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids={id}
+  Used for: BTC, ETH, SOL prices, market cap, 24h change, 24h high
+
+- CoinGecko Simple Price API — FREE, no API key needed
+  URL: api.coingecko.com/api/v3/simple/price?ids={stableIds}&vs_currencies={currencyCodes}
+  Used for: USDT, USDC, DAI prices across 20 currencies (USD, EUR, GBP, JPY, CNY, INR, AUD, CAD, CHF, SGD, HKD, SEK, NOK, DKK, NZD, ZAR, BRL, MXN, KRW, THB)
+
+- CORS Proxy fallback — FREE
+  URL: corsproxy.io (used if direct CoinGecko calls fail due to CORS)
+
+Total cost: $0 — all APIs are free with no key required.
+Note: CoinGecko free tier has rate limits (~10-30 calls/min). If usage grows, paid plans start at $129/month.
+
+6. DATA REFRESH
+---------------
+- Automatic every 30 seconds (client-side setInterval)
+- No manual refresh needed — runs continuously while the page is open
+- No cached/stored data — always live
+
+7. DEPLOYMENT
+-------------
+- GitHub repo: hosted on GitHub (Paintedstork28 account)
+- GitHub Pages: static HTML served via GitHub Pages for a shareable link
+- Local: just open the HTML file in any browser
+
+8. WHAT IT CAN BE USED FOR
+---------------------------
+- Real-time crypto price monitoring
+- Identifying stablecoin arbitrage opportunities across global currencies
+- Checking stablecoin peg status (is USDT/USDC/DAI holding its $1 peg?)
+- Estimating arbitrage profits with realistic fee deductions
+- Finding which currency offers the best arbitrage spread at any moment
+
+9. SUGGESTED NEXT STEPS
+------------------------
+- Add more stablecoins (BUSD, FRAX, TUSD, PYUSD)
+- Add historical arbitrage spread charts (track opportunities over time)
+- Add price alerts / notifications when spreads exceed a threshold
+- Add more cryptocurrencies beyond BTC/ETH/SOL
+- Add exchange-specific pricing (Binance vs Coinbase vs WazirX spreads)
+- Consider upgrading to CoinGecko Pro API if rate limits become an issue
+- Add portfolio tracker — input holdings, see total value and P&L

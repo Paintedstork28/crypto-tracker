@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crypto Price Tracker &amp; Arbitrage</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh; background: #0f0f1a;
+      font-family: system-ui, sans-serif; color: #fff;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 40px 20px 60px;
+    }
+    h1 {
+      font-size: 2rem; margin-bottom: 8px;
+      background: linear-gradient(90deg, #f7931a, #627eea);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .subtitle { color: #888; font-size: 0.9rem; margin-bottom: 40px; }
+    .section-title {
+      font-size: 1.1rem; font-weight: 600; color: #aaa;
+      margin: 36px 0 16px; text-transform: uppercase;
+      letter-spacing: 1px; width: 100%; max-width: 960px; padding-left: 4px;
+    }
+    .section-title:first-of-type { margin-top: 0; }
+    .cards { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; max-width: 960px; }
+    .card {
+      background: #1a1a2e; border: 1px solid #2a2a4a;
+      border-radius: 16px; padding: 32px; width: 300px;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .card.stablecoin { border-color: #2a4a3a; }
+    .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .coin-icon { width: 40px; height: 40px; border-radius: 50%; }
+    .coin-name { font-size: 1.2rem; font-weight: 600; }
+    .coin-symbol { color: #888; font-size: 0.85rem; text-transform: uppercase; }
+    .price { font-size: 2rem; font-weight: 700; margin-bottom: 16px; }
+    .peg-status { display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+    .peg-ok { background: #1a3a2a; color: #00d68f; }
+    .peg-warn { background: #3a2a1a; color: #ffaa00; }
+    .stats { display: flex; justify-content: space-between; gap: 12px; }
+    .stat-label { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
+    .stat-value { font-size: 0.9rem; font-weight: 500; }
+    .change-positive { color: #00d68f; }
+    .change-negative { color: #ff4d4f; }
+
+    /* Panels */
+    .arb-panel {
+      width: 100%; max-width: 960px; background: #1a1a2e;
+      border: 1px solid #2a2a4a; border-radius: 16px; padding: 32px; margin-top: 16px;
+    }
+    .arb-panel h2 { font-size: 1.3rem; margin-bottom: 20px; color: #fff; }
+    .arb-strategy { background: #0f0f1a; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    .arb-flow { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+    .arb-step {
+      background: #1a1a2e; border: 1px solid #3a3a5a; border-radius: 10px;
+      padding: 12px 18px; text-align: center; min-width: 140px;
+    }
+    .arb-step .step-num { font-size: 0.65rem; color: #627eea; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+    .arb-step .step-action { font-size: 0.95rem; font-weight: 600; }
+    .arb-step .step-detail { font-size: 0.75rem; color: #888; margin-top: 4px; }
+    .arb-arrow { color: #627eea; font-size: 1.2rem; }
+    .arb-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 16px; }
+    .arb-stat { background: #1a1a2e; border-radius: 10px; padding: 16px; border: 1px solid #2a2a4a; }
+    .arb-stat .label { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
+    .arb-stat .value { font-size: 1.1rem; font-weight: 700; }
+    .arb-stat .value.green { color: #00d68f; }
+    .arb-stat .value.red { color: #ff4d4f; }
+    .arb-stat .value.amber { color: #ffaa00; }
+    .no-arb { color: #888; text-align: center; padding: 20px; font-size: 0.95rem; }
+
+    /* Fee Breakdown */
+    .fee-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; }
+    .fee-item {
+      background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 10px; padding: 16px;
+    }
+    .fee-item .fee-name { font-size: 0.8rem; color: #aaa; margin-bottom: 4px; }
+    .fee-item .fee-pct { font-size: 1.3rem; font-weight: 700; color: #ffaa00; }
+    .fee-item .fee-desc { font-size: 0.7rem; color: #666; margin-top: 6px; line-height: 1.4; }
+    .fee-item.total { border-color: #ff4d4f; }
+    .fee-item.total .fee-pct { color: #ff4d4f; }
+    .fee-explainer {
+      background: #0f0f1a; border-radius: 10px; padding: 20px; margin-top: 16px;
+      font-size: 0.85rem; color: #aaa; line-height: 1.6;
+    }
+    .fee-explainer strong { color: #fff; }
+    .fee-formula { font-family: monospace; background: #1a1a2e; padding: 12px 16px; border-radius: 8px; margin: 12px 0; font-size: 0.8rem; color: #ccc; }
+
+    /* Tables */
+    .vol-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .vol-table th {
+      text-align: left; font-size: 0.75rem; color: #888;
+      padding: 8px 12px; border-bottom: 1px solid #2a2a4a;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .vol-table td { padding: 10px 12px; border-bottom: 1px solid #1a1a2e; font-size: 0.9rem; }
+    .vol-table tr:hover td { background: #0f0f1a; }
+    .vol-table .highlight { background: #1a3a2a; }
+    .vol-table .highlight td { font-weight: 600; color: #00d68f; }
+    .target-badge {
+      display: inline-block; font-size: 0.6rem; background: #00d68f;
+      color: #0f0f1a; padding: 1px 6px; border-radius: 3px;
+      margin-left: 6px; font-weight: 700; vertical-align: middle;
+    }
+    .rank-badge {
+      display: inline-block; font-size: 0.6rem; padding: 2px 6px; border-radius: 3px;
+      font-weight: 700; vertical-align: middle; margin-left: 6px;
+    }
+    .rank-1 { background: #ffd700; color: #0f0f1a; }
+    .rank-2 { background: #c0c0c0; color: #0f0f1a; }
+    .rank-3 { background: #cd7f32; color: #fff; }
+
+    /* Dropdowns & inputs */
+    .styled-select {
+      background: #1a1a2e; border: 1px solid #3a3a5a; border-radius: 8px;
+      padding: 10px 14px; color: #fff; font-size: 0.95rem; outline: none;
+      font-family: inherit; cursor: pointer; min-width: 180px;
+    }
+    .styled-select:focus { border-color: #627eea; }
+    .styled-select option { background: #1a1a2e; color: #fff; }
+    .calc-section { background: #0f0f1a; border-radius: 12px; padding: 24px; margin-top: 20px; }
+    .calc-section h3 { font-size: 1rem; margin-bottom: 16px; }
+    .calc-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+    .calc-input {
+      background: #1a1a2e; border: 1px solid #3a3a5a; border-radius: 8px;
+      padding: 12px 16px; color: #fff; font-size: 1.1rem; width: 240px;
+      outline: none; font-family: inherit;
+    }
+    .calc-input:focus { border-color: #627eea; }
+    .calc-input::placeholder { color: #555; }
+    .calc-result { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .calc-result-item { background: #1a1a2e; border-radius: 10px; padding: 16px; border: 1px solid #2a2a4a; }
+    .calc-result-item .label { font-size: 0.75rem; color: #888; margin-bottom: 4px; }
+    .calc-result-item .value { font-size: 1.2rem; font-weight: 700; }
+
+    /* Currency leaderboard */
+    .currency-leaderboard { overflow-x: auto; }
+    .currency-detail { background: #0f0f1a; border-radius: 12px; padding: 24px; margin-top: 16px; }
+
+    /* Platforms */
+    .platforms { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-top: 12px; }
+    .platform { background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 12px; padding: 20px; }
+    .platform-name { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+    .platform-desc { font-size: 0.8rem; color: #888; margin-bottom: 8px; line-height: 1.4; }
+    .platform-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+    .platform-tag { font-size: 0.65rem; background: #2a2a4a; color: #ccc; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .platform-tag.green { background: #1a3a2a; color: #00d68f; }
+
+    /* Status */
+    .status-bar { margin-top: 40px; display: flex; align-items: center; gap: 8px; color: #666; font-size: 0.8rem; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #00d68f; }
+    .dot.error { background: #ff4d4f; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .loading .price { animation: pulse 1s infinite; opacity: 0.4; }
+  </style>
+</head>
+<body>
+  <h1>Crypto Price Tracker &amp; Arbitrage</h1>
+  <p class="subtitle">Live prices from CoinGecko &middot; Auto-refreshes every 30s</p>
+
+  <div class="section-title">Cryptocurrencies</div>
+  <div class="cards" id="crypto-cards"></div>
+
+  <div class="section-title">USD Stablecoins</div>
+  <div class="cards" id="stable-cards"></div>
+
+  <!-- Fee Breakdown -->
+  <div class="section-title">Fee Breakdown &amp; Gross vs Net Profit</div>
+  <div class="arb-panel">
+    <h2>Understanding the Costs</h2>
+    <div class="fee-grid">
+      <div class="fee-item">
+        <div class="fee-name">Buy-Side Trading Fee</div>
+        <div class="fee-pct">0.10%</div>
+        <div class="fee-desc">Exchange fee when buying the cheaper stablecoin with your local currency. Charged by WazirX, CoinDCX, Binance etc.</div>
+      </div>
+      <div class="fee-item">
+        <div class="fee-name">Swap / Convert Fee</div>
+        <div class="fee-pct">0.05%</div>
+        <div class="fee-desc">Fee to swap cheap stablecoin to expensive one. Binance Convert: 0%. DEX (1inch/Uniswap on Polygon): ~0.05%. Ethereum mainnet: higher gas.</div>
+      </div>
+      <div class="fee-item">
+        <div class="fee-name">Sell-Side Trading Fee</div>
+        <div class="fee-pct">0.10%</div>
+        <div class="fee-desc">Exchange fee when selling the expensive stablecoin back to local currency. Same as buy-side.</div>
+      </div>
+      <div class="fee-item">
+        <div class="fee-name">Network / Withdrawal Fee</div>
+        <div class="fee-pct">0.02%</div>
+        <div class="fee-desc">Blockchain transfer fee if moving between exchanges. Use Polygon/TRC20 for ~$0.01-$0.10. ERC20 can be $2-5.</div>
+      </div>
+      <div class="fee-item">
+        <div class="fee-name">Currency Conversion Spread</div>
+        <div class="fee-pct">0.03%</div>
+        <div class="fee-desc">Hidden spread between market exchange rate and the rate you actually get when converting fiat to crypto and back.</div>
+      </div>
+      <div class="fee-item total">
+        <div class="fee-name">Total Estimated Fees</div>
+        <div class="fee-pct">~0.30%</div>
+        <div class="fee-desc">Combined cost per round-trip trade. Your spread must exceed this for profit.</div>
+      </div>
+    </div>
+    <div class="fee-explainer">
+      <strong>Gross Profit</strong> = the raw price difference (spread) between the cheap and expensive stablecoin, multiplied by the number of coins you trade. This ignores all costs.
+      <div class="fee-formula">Gross Profit = (Sell Price - Buy Price) &times; Number of Coins</div>
+      <strong>Net Profit</strong> = what you actually take home after subtracting all fees (trading fees on both sides, swap fee, network fee, and conversion spread).
+      <div class="fee-formula">Net Profit = Gross Profit - Buy Fee - Swap Fee - Sell Fee - Network Fee - Conversion Spread</div>
+      <strong>Example:</strong> If spread = 0.50% and total fees = 0.30%, your <strong>net profit = 0.20%</strong> of the invested amount.
+      On $10,000 invested, that's $20 net profit per round-trip.
+    </div>
+  </div>
+
+  <!-- Arbitrage Strategy -->
+  <div class="section-title">Arbitrage Strategy</div>
+  <div class="arb-panel" id="arb-panel">
+    <h2>Stablecoin Arbitrage (Round-Trip)</h2>
+    <div id="arb-content"><p class="no-arb">Loading prices...</p></div>
+  </div>
+
+  <!-- Multi-Currency Profitability -->
+  <div class="section-title">Most Profitable Currency</div>
+  <div class="arb-panel">
+    <h2>Spread Comparison Across Top 20 Currencies</h2>
+    <p style="color:#888; font-size:0.85rem; margin-bottom:16px;">
+      Ranked by net spread. The wider the spread in a currency, the more profitable the arbitrage.
+    </p>
+    <div class="currency-leaderboard" id="currency-leaderboard">
+      <p class="no-arb">Loading multi-currency data...</p>
+    </div>
+    <div style="margin-top:20px;">
+      <label style="color:#888; font-size:0.85rem; margin-right:8px;">View detailed breakdown for:</label>
+      <select class="styled-select" id="currency-detail-select">
+        <option value="">Select a currency...</option>
+      </select>
+    </div>
+    <div id="currency-detail"></div>
+  </div>
+
+  <!-- Volume Breakdown -->
+  <div class="section-title">Volume for Significant Profit</div>
+  <div class="arb-panel">
+    <h2>How Much Capital Do You Need?</h2>
+    <p style="color:#888; font-size:0.85rem; margin-bottom:12px;">
+      Volumes needed to hit your target profit equivalent to ₹10,000 at the current spread.
+    </p>
+    <div id="vol-content"><p class="no-arb">Loading...</p></div>
+  </div>
+
+  <!-- Profit Calculator -->
+  <div class="section-title">Profit Calculator</div>
+  <div class="arb-panel">
+    <div class="calc-section">
+      <h3>Enter Your Investment Amount</h3>
+      <div class="calc-row">
+        <select class="styled-select" id="calc-currency-select"></select>
+        <input type="number" class="calc-input" id="invest-input" placeholder="Enter amount" min="0">
+      </div>
+      <div class="calc-result" id="calc-result">
+        <div class="calc-result-item">
+          <div class="label">Investment in USD</div>
+          <div class="value" id="calc-usd">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Stablecoins Bought</div>
+          <div class="value" id="calc-coins">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Gross Profit (USD)</div>
+          <div class="value" id="calc-gross-usd">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Fee: Buy-Side (0.10%)</div>
+          <div class="value amber" id="calc-fee-buy">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Fee: Swap (0.05%)</div>
+          <div class="value amber" id="calc-fee-swap">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Fee: Sell-Side (0.10%)</div>
+          <div class="value amber" id="calc-fee-sell">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Fee: Network (0.02%)</div>
+          <div class="value amber" id="calc-fee-network">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Fee: Conversion Spread (0.03%)</div>
+          <div class="value amber" id="calc-fee-spread">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Total Fees (USD)</div>
+          <div class="value red" id="calc-fees-total">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Net Profit (Local Currency)</div>
+          <div class="value green" id="calc-net-local">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Net Profit (INR)</div>
+          <div class="value green" id="calc-net-inr">--</div>
+        </div>
+        <div class="calc-result-item">
+          <div class="label">Return on Investment</div>
+          <div class="value" id="calc-roi">--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Platforms -->
+  <div class="section-title">Platforms to Execute</div>
+  <div class="arb-panel">
+    <h2>Where to Trade</h2>
+    <p style="color:#888; font-size:0.85rem; margin-bottom:16px;">
+      Indian and global platforms that support fiat deposits and stablecoin trading.
+    </p>
+    <div class="platforms">
+      <div class="platform">
+        <div class="platform-name">WazirX</div>
+        <div class="platform-desc">Indian exchange with INR pairs for USDT, USDC. Supports P2P and direct bank transfer (UPI/IMPS). Low maker fees (0.1%). Good for INR &rarr; USDT entry.</div>
+        <div class="platform-tags"><span class="platform-tag green">INR Deposit</span><span class="platform-tag">USDT/INR</span><span class="platform-tag">UPI</span><span class="platform-tag">P2P</span></div>
+      </div>
+      <div class="platform">
+        <div class="platform-name">CoinDCX</div>
+        <div class="platform-desc">Indian exchange with INR on-ramp. Supports USDT, USDC, DAI trading. Bank transfer and UPI support. 0.1% trading fees.</div>
+        <div class="platform-tags"><span class="platform-tag green">INR Deposit</span><span class="platform-tag">USDT/USDC/DAI</span><span class="platform-tag">Bank Transfer</span></div>
+      </div>
+      <div class="platform">
+        <div class="platform-name">Binance P2P</div>
+        <div class="platform-desc">Buy/sell USDT with INR via P2P at competitive rates. Zero maker fees on P2P. Convert between stablecoins on Binance Convert at 0 fees. Best for the swap step.</div>
+        <div class="platform-tags"><span class="platform-tag green">INR P2P</span><span class="platform-tag">0-Fee Convert</span><span class="platform-tag">USDT/USDC/DAI</span></div>
+      </div>
+      <div class="platform">
+        <div class="platform-name">CoinSwitch</div>
+        <div class="platform-desc">Simple Indian platform with INR deposits via UPI/bank. Supports USDT and USDC. Good for beginners. Slightly higher spread but easy to use.</div>
+        <div class="platform-tags"><span class="platform-tag green">INR Deposit</span><span class="platform-tag">UPI</span><span class="platform-tag">Beginner Friendly</span></div>
+      </div>
+      <div class="platform">
+        <div class="platform-name">1inch / Uniswap (DEX)</div>
+        <div class="platform-desc">Decentralized swap between stablecoins on Ethereum/Polygon. 1inch aggregates best rates. Use Polygon for low gas (~$0.01). Best for USDC &harr; DAI swaps.</div>
+        <div class="platform-tags"><span class="platform-tag">DEX</span><span class="platform-tag">Low Gas (Polygon)</span><span class="platform-tag">Best Rates</span></div>
+      </div>
+      <div class="platform">
+        <div class="platform-name">Recommended Workflow</div>
+        <div class="platform-desc">
+          1. Deposit local currency on exchange via bank/UPI<br>
+          2. Buy the cheapest stablecoin<br>
+          3. Swap to expensive stablecoin (Binance Convert or DEX on Polygon)<br>
+          4. Sell expensive stablecoin back to local currency<br>
+          5. Withdraw to bank account
+        </div>
+        <div class="platform-tags"><span class="platform-tag green">Full Flow</span><span class="platform-tag">5 Steps</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">Connecting...</span>
+  </div>
+
+  <script>
+    const coins = [
+      { id: 'bitcoin',  symbol: 'BTC',  name: 'Bitcoin',  section: 'crypto', icon: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png' },
+      { id: 'ethereum', symbol: 'ETH',  name: 'Ethereum', section: 'crypto', icon: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png' },
+      { id: 'tether',   symbol: 'USDT', name: 'Tether',   section: 'stable', icon: 'https://assets.coingecko.com/coins/images/325/small/Tether.png', peg: 1.0 },
+      { id: 'usd-coin', symbol: 'USDC', name: 'USD Coin', section: 'stable', icon: 'https://assets.coingecko.com/coins/images/6319/small/usdc.png', peg: 1.0 },
+      { id: 'dai',      symbol: 'DAI',  name: 'Dai',      section: 'stable', icon: 'https://assets.coingecko.com/coins/images/9956/small/Badge_Dai.png', peg: 1.0 },
+    ];
+
+    const stableIds = coins.filter(c => c.section === 'stable').map(c => c.id);
+
+    // Fee components
+    const FEES = {
+      buyTrade: 0.0010,   // 0.10%
+      swap:     0.0005,   // 0.05%
+      sellTrade:0.0010,   // 0.10%
+      network:  0.0002,   // 0.02%
+      fxSpread: 0.0003,   // 0.03%
+    };
+    const TOTAL_FEE = Object.values(FEES).reduce((a, b) => a + b, 0); // 0.30%
+
+    // Top 20 currencies
+    const currencies = [
+      { code: 'usd', symbol: '$',  name: 'US Dollar' },
+      { code: 'eur', symbol: '€',  name: 'Euro' },
+      { code: 'gbp', symbol: '£',  name: 'British Pound' },
+      { code: 'jpy', symbol: '¥',  name: 'Japanese Yen' },
+      { code: 'cny', symbol: '¥',  name: 'Chinese Yuan' },
+      { code: 'inr', symbol: '₹',  name: 'Indian Rupee' },
+      { code: 'aud', symbol: 'A$', name: 'Australian Dollar' },
+      { code: 'cad', symbol: 'C$', name: 'Canadian Dollar' },
+      { code: 'chf', symbol: 'Fr', name: 'Swiss Franc' },
+      { code: 'sgd', symbol: 'S$', name: 'Singapore Dollar' },
+      { code: 'hkd', symbol: 'HK$',name: 'Hong Kong Dollar' },
+      { code: 'sek', symbol: 'kr', name: 'Swedish Krona' },
+      { code: 'nok', symbol: 'kr', name: 'Norwegian Krone' },
+      { code: 'dkk', symbol: 'kr', name: 'Danish Krone' },
+      { code: 'nzd', symbol: 'NZ$',name: 'New Zealand Dollar' },
+      { code: 'zar', symbol: 'R',  name: 'South African Rand' },
+      { code: 'brl', symbol: 'R$', name: 'Brazilian Real' },
+      { code: 'mxn', symbol: 'Mex$',name: 'Mexican Peso' },
+      { code: 'krw', symbol: '₩',  name: 'South Korean Won' },
+      { code: 'thb', symbol: '฿',  name: 'Thai Baht' },
+    ];
+
+    let arbData = null;
+    let multiCurrencyData = {}; // { currCode: { buy, sell, spread, spreadPct, ... } }
+    let fxRates = {}; // code -> rate per 1 USDT
+
+    const fmt = (n, d = 2) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fmtCur = (n, sym, d = 2) => sym + n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const fmtINR = (n) => '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtCompact = (n) => {
+      if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
+      if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+      if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+      return '$' + n.toLocaleString();
+    };
+    const fmtCompactINR = (n) => {
+      if (n >= 1e7) return '₹' + (n / 1e7).toFixed(2) + ' Cr';
+      if (n >= 1e5) return '₹' + (n / 1e5).toFixed(2) + ' L';
+      return fmtINR(n);
+    };
+
+    function buildCards() {
+      const cc = document.getElementById('crypto-cards');
+      const sc = document.getElementById('stable-cards');
+      coins.forEach(coin => {
+        const isStable = coin.section === 'stable';
+        const card = document.createElement('div');
+        card.className = 'card' + (isStable ? ' stablecoin' : '');
+        card.id = `${coin.symbol.toLowerCase()}-card`;
+        const k = coin.symbol.toLowerCase();
+        card.innerHTML = `
+          <div class="card-header">
+            <img class="coin-icon" src="${coin.icon}" alt="${coin.symbol}">
+            <div><div class="coin-name">${coin.name}</div><div class="coin-symbol">${coin.symbol}</div></div>
+          </div>
+          <div class="price" id="${k}-price">--${isStable ? `<span class="peg-status" id="${k}-peg"></span>` : ''}</div>
+          <div class="stats">
+            <div><div class="stat-label">24h Change</div><div class="stat-value" id="${k}-change">--</div></div>
+            <div><div class="stat-label">Market Cap</div><div class="stat-value" id="${k}-mcap">--</div></div>
+            <div><div class="stat-label">${isStable ? '24h Volume' : '24h High'}</div><div class="stat-value" id="${k}-extra">--</div></div>
+          </div>`;
+        (isStable ? sc : cc).appendChild(card);
+      });
+    }
+
+    function buildCalcCurrencySelect() {
+      const sel = document.getElementById('calc-currency-select');
+      currencies.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.code;
+        opt.textContent = `${c.code.toUpperCase()} - ${c.name}`;
+        if (c.code === 'inr') opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
+
+    function updateArbitrage(stableData, usdInr) {
+      const container = document.getElementById('arb-content');
+      if (stableData.length < 2) {
+        container.innerHTML = '<p class="no-arb">Need at least 2 stablecoins.</p>';
+        return;
+      }
+      const sorted = [...stableData].sort((a, b) => a.current_price - b.current_price);
+      const buyC = sorted[0], sellC = sorted[sorted.length - 1];
+      const spread = sellC.current_price - buyC.current_price;
+      const spreadPct = (spread / buyC.current_price) * 100;
+      const netSpreadPct = spreadPct - (TOTAL_FEE * 100);
+      const buyName = coins.find(c => c.id === buyC.id)?.symbol || buyC.symbol;
+      const sellName = coins.find(c => c.id === sellC.id)?.symbol || sellC.symbol;
+
+      arbData = { buyC, sellC, buyName, sellName, spread, spreadPct, netSpreadPct, usdInr };
+      const profitable = netSpreadPct > 0;
+
+      container.innerHTML = `
+        <div class="arb-strategy">
+          <div class="arb-flow">
+            <div class="arb-step"><div class="step-num">Step 1</div><div class="step-action">Deposit Currency</div><div class="step-detail">Bank / Wire / UPI</div></div>
+            <div class="arb-arrow">&rarr;</div>
+            <div class="arb-step" style="border-color:#00d68f;"><div class="step-num">Step 2 &middot; Buy</div><div class="step-action" style="color:#00d68f;">${buyName}</div><div class="step-detail">${fmt(buyC.current_price, 4)} (cheapest)</div></div>
+            <div class="arb-arrow">&rarr;</div>
+            <div class="arb-step"><div class="step-num">Step 3 &middot; Swap</div><div class="step-action">${buyName} &rarr; ${sellName}</div><div class="step-detail">DEX or Binance Convert</div></div>
+            <div class="arb-arrow">&rarr;</div>
+            <div class="arb-step" style="border-color:#ff4d4f;"><div class="step-num">Step 4 &middot; Sell</div><div class="step-action" style="color:#ff4d4f;">${sellName}</div><div class="step-detail">${fmt(sellC.current_price, 4)} (highest)</div></div>
+            <div class="arb-arrow">&rarr;</div>
+            <div class="arb-step"><div class="step-num">Step 5</div><div class="step-action">Withdraw Currency</div><div class="step-detail">Bank Transfer</div></div>
+          </div>
+        </div>
+        <div class="arb-summary">
+          <div class="arb-stat"><div class="label">Gross Spread (per coin)</div><div class="value">${fmt(spread, 4)} (${spreadPct.toFixed(3)}%)</div></div>
+          <div class="arb-stat"><div class="label">Total Fees</div><div class="value amber">-${(TOTAL_FEE * 100).toFixed(2)}%</div></div>
+          <div class="arb-stat"><div class="label">Net Spread (per coin)</div><div class="value ${profitable ? 'green' : 'red'}">${netSpreadPct.toFixed(3)}%</div></div>
+          <div class="arb-stat"><div class="label">Verdict</div><div class="value ${profitable ? 'green' : 'red'}">${profitable ? 'PROFITABLE' : 'FEES EXCEED SPREAD'}</div></div>
+        </div>`;
+
+      updateVolumeTable();
+      updateCalculator();
+    }
+
+    function updateMultiCurrency(multiData) {
+      // multiData: { currCode: [ {id, price}, ... ] }
+      const results = [];
+      for (const cur of currencies) {
+        const prices = multiData[cur.code];
+        if (!prices || prices.length < 2) continue;
+        const sorted = [...prices].sort((a, b) => a.price - b.price);
+        const buyP = sorted[0], sellP = sorted[sorted.length - 1];
+        const spread = sellP.price - buyP.price;
+        const spreadPct = (spread / buyP.price) * 100;
+        const netPct = spreadPct - (TOTAL_FEE * 100);
+        results.push({
+          cur, buyP, sellP, spread, spreadPct, netPct,
+          buySymbol: coins.find(c => c.id === buyP.id)?.symbol || buyP.id,
+          sellSymbol: coins.find(c => c.id === sellP.id)?.symbol || sellP.id,
+        });
+      }
+
+      results.sort((a, b) => b.netPct - a.netPct);
+
+      const container = document.getElementById('currency-leaderboard');
+      if (results.length === 0) {
+        container.innerHTML = '<p class="no-arb">No data available.</p>';
+        return;
+      }
+
+      let rows = results.map((r, i) => {
+        const rankBadge = i < 3 ? `<span class="rank-badge rank-${i+1}">#${i+1}</span>` : '';
+        const profitable = r.netPct > 0;
+        return `<tr>
+          <td>${r.cur.code.toUpperCase()} ${rankBadge}</td>
+          <td>${r.cur.name}</td>
+          <td>${r.buySymbol} &rarr; ${r.sellSymbol}</td>
+          <td>${r.spreadPct.toFixed(4)}%</td>
+          <td class="${profitable ? 'change-positive' : 'change-negative'}">${r.netPct.toFixed(4)}%</td>
+          <td class="${profitable ? 'change-positive' : 'change-negative'}">${profitable ? 'YES' : 'NO'}</td>
+        </tr>`;
+      }).join('');
+
+      container.innerHTML = `<div style="overflow-x:auto;">
+        <table class="vol-table">
+          <thead><tr><th>Currency</th><th>Name</th><th>Best Pair</th><th>Gross Spread</th><th>Net Spread</th><th>Profitable?</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>`;
+
+      // Populate dropdown
+      const sel = document.getElementById('currency-detail-select');
+      const prevVal = sel.value;
+      sel.innerHTML = '<option value="">Select a currency...</option>';
+      results.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.cur.code;
+        opt.textContent = `${r.cur.code.toUpperCase()} - ${r.cur.name} (net: ${r.netPct.toFixed(4)}%)`;
+        sel.appendChild(opt);
+      });
+      if (prevVal) sel.value = prevVal;
+
+      // Store for detail view
+      window._currencyResults = results;
+      if (sel.value) showCurrencyDetail(sel.value);
+    }
+
+    function showCurrencyDetail(code) {
+      const container = document.getElementById('currency-detail');
+      const results = window._currencyResults;
+      if (!results) return;
+      const r = results.find(x => x.cur.code === code);
+      if (!r) { container.innerHTML = ''; return; }
+
+      const investEquiv = 1000000; // 1M in local currency
+      const rateToUsd = fxRates['usd'] && fxRates[code] ? fxRates[code] / fxRates['usd'] : null;
+      const profitable = r.netPct > 0;
+
+      let profitSection = '';
+      if (rateToUsd && profitable) {
+        const investUSD = investEquiv / rateToUsd;
+        const numCoins = investUSD / (r.buyP.price / rateToUsd);
+        const grossUSD = numCoins * r.spread / rateToUsd;
+        const feesUSD = investUSD * TOTAL_FEE;
+        const netUSD = grossUSD - feesUSD;
+        const netLocal = netUSD * rateToUsd;
+        const inrRate = fxRates['inr'] / fxRates['usd'];
+        const netINR = netUSD * inrRate;
+        profitSection = `
+          <div style="margin-top:16px;">
+            <div style="color:#888; font-size:0.8rem; margin-bottom:8px;">Profit on ${r.cur.symbol}${investEquiv.toLocaleString()} invested:</div>
+            <div class="arb-summary">
+              <div class="arb-stat"><div class="label">Gross Profit</div><div class="value">${r.cur.symbol}${(grossUSD * rateToUsd).toFixed(2)}</div></div>
+              <div class="arb-stat"><div class="label">Fees</div><div class="value amber">${r.cur.symbol}${(feesUSD * rateToUsd).toFixed(2)}</div></div>
+              <div class="arb-stat"><div class="label">Net Profit (${r.cur.code.toUpperCase()})</div><div class="value green">${r.cur.symbol}${netLocal.toFixed(2)}</div></div>
+              <div class="arb-stat"><div class="label">Net Profit (INR)</div><div class="value green">${fmtINR(netINR)}</div></div>
+            </div>
+          </div>`;
+      }
+
+      container.innerHTML = `
+        <div class="currency-detail">
+          <h3 style="margin-bottom:12px;">${r.cur.code.toUpperCase()} - ${r.cur.name}</h3>
+          <div class="arb-summary">
+            <div class="arb-stat"><div class="label">Buy (Cheapest)</div><div class="value green">${r.buySymbol} @ ${r.cur.symbol}${r.buyP.price.toFixed(4)}</div></div>
+            <div class="arb-stat"><div class="label">Sell (Most Expensive)</div><div class="value red">${r.sellSymbol} @ ${r.cur.symbol}${r.sellP.price.toFixed(4)}</div></div>
+            <div class="arb-stat"><div class="label">Gross Spread</div><div class="value">${r.cur.symbol}${r.spread.toFixed(4)} (${r.spreadPct.toFixed(4)}%)</div></div>
+            <div class="arb-stat"><div class="label">Net Spread</div><div class="value ${profitable ? 'green' : 'red'}">${r.netPct.toFixed(4)}%</div></div>
+          </div>
+          ${profitSection}
+        </div>`;
+    }
+
+    document.getElementById('currency-detail-select').addEventListener('change', (e) => showCurrencyDetail(e.target.value));
+
+    function updateVolumeTable() {
+      const container = document.getElementById('vol-content');
+      if (!arbData) return;
+      const { spread, usdInr, buyC } = arbData;
+      const netSpreadPerCoin = spread - (TOTAL_FEE * buyC.current_price);
+
+      if (netSpreadPerCoin <= 0) {
+        container.innerHTML = `<p class="no-arb">Current spread is less than fees. No profitable volume at this spread.</p>`;
+        return;
+      }
+
+      const targetINR = 10000;
+      const targetUSD = targetINR / usdInr;
+      const coinsForTarget = targetUSD / netSpreadPerCoin;
+      const investForTarget = coinsForTarget * buyC.current_price;
+
+      const volumes = [
+        { label: '₹1 Lakh', inr: 100000 },
+        { label: '₹5 Lakh', inr: 500000 },
+        { label: '₹10 Lakh', inr: 1000000 },
+        { label: '₹25 Lakh', inr: 2500000 },
+        { label: '₹50 Lakh', inr: 5000000 },
+        { label: '₹1 Crore', inr: 10000000 },
+      ];
+
+      let rows = volumes.map(v => {
+        const usd = v.inr / usdInr;
+        const nc = usd / buyC.current_price;
+        const gross = nc * spread;
+        const fees = usd * TOTAL_FEE;
+        const netUSD = gross - fees;
+        const netINR = netUSD * usdInr;
+        const hit = netINR >= targetINR;
+        return `<tr class="${hit ? 'highlight' : ''}">
+          <td>${v.label}</td><td>${fmt(usd, 0)}</td><td>${Math.floor(nc).toLocaleString()}</td>
+          <td>${fmt(gross, 2)}</td><td>${fmt(fees, 2)}</td>
+          <td>${fmtINR(netINR)}${hit ? '<span class="target-badge">Target Hit</span>' : ''}</td>
+        </tr>`;
+      }).join('');
+
+      container.innerHTML = `
+        <div style="margin-bottom:16px;">
+          <span style="color:#888; font-size:0.85rem;">Capital needed for ₹10,000 net profit: </span>
+          <span style="font-size:1.1rem; font-weight:700; color:#00d68f;">${fmtCompactINR(investForTarget * usdInr)}</span>
+          <span style="color:#888; font-size:0.85rem;"> (${fmt(investForTarget, 0)})</span>
+        </div>
+        <div style="overflow-x:auto;">
+        <table class="vol-table">
+          <thead><tr><th>Investment</th><th>In USD</th><th>Coins</th><th>Gross Profit</th><th>Total Fees</th><th>Net Profit (INR)</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>`;
+    }
+
+    function updateCalculator() {
+      const investVal = parseFloat(document.getElementById('invest-input').value);
+      if (!arbData || !investVal || investVal <= 0) return;
+
+      const { buyC, spread, buyName } = arbData;
+      const selCode = document.getElementById('calc-currency-select').value || 'inr';
+      const cur = currencies.find(c => c.code === selCode);
+      const localRate = fxRates[selCode] || 1;
+      const usdRate = fxRates['usd'] || 1;
+      const inrRate = fxRates['inr'] || 83.5;
+      const toUsd = usdRate / localRate; // 1 local currency = toUsd USD
+
+      const investUSD = investVal * toUsd;
+      const numCoins = investUSD / buyC.current_price;
+      const grossProfit = numCoins * spread;
+
+      const feeBuy = investUSD * FEES.buyTrade;
+      const feeSwap = investUSD * FEES.swap;
+      const feeSell = investUSD * FEES.sellTrade;
+      const feeNet = investUSD * FEES.network;
+      const feeFx = investUSD * FEES.fxSpread;
+      const totalFees = feeBuy + feeSwap + feeSell + feeNet + feeFx;
+
+      const netProfitUSD = grossProfit - totalFees;
+      const netProfitLocal = netProfitUSD / toUsd;
+      const netProfitINR = netProfitUSD * (inrRate / usdRate);
+      const roi = (netProfitUSD / investUSD) * 100;
+
+      document.getElementById('calc-usd').textContent = fmt(investUSD, 2);
+      document.getElementById('calc-coins').textContent = Math.floor(numCoins).toLocaleString() + ' ' + buyName;
+      document.getElementById('calc-gross-usd').textContent = fmt(grossProfit, 4);
+      document.getElementById('calc-fee-buy').textContent = fmt(feeBuy, 4);
+      document.getElementById('calc-fee-swap').textContent = fmt(feeSwap, 4);
+      document.getElementById('calc-fee-sell').textContent = fmt(feeSell, 4);
+      document.getElementById('calc-fee-network').textContent = fmt(feeNet, 4);
+      document.getElementById('calc-fee-spread').textContent = fmt(feeFx, 4);
+      document.getElementById('calc-fees-total').textContent = fmt(totalFees, 4);
+
+      const netLocalEl = document.getElementById('calc-net-local');
+      netLocalEl.textContent = fmtCur(netProfitLocal, cur?.symbol || '', 2) + ` (${selCode.toUpperCase()})`;
+      netLocalEl.className = 'value ' + (netProfitLocal >= 0 ? 'green' : 'red');
+
+      const netInrEl = document.getElementById('calc-net-inr');
+      netInrEl.textContent = fmtINR(netProfitINR);
+      netInrEl.className = 'value ' + (netProfitINR >= 0 ? 'green' : 'red');
+
+      const roiEl = document.getElementById('calc-roi');
+      roiEl.textContent = roi.toFixed(3) + '%';
+      roiEl.className = 'value ' + (roi >= 0 ? 'green' : 'red');
+    }
+
+    document.getElementById('invest-input').addEventListener('input', updateCalculator);
+    document.getElementById('calc-currency-select').addEventListener('change', updateCalculator);
+
+    async function fetchPrices() {
+      document.querySelectorAll('.card').forEach(c => c.classList.add('loading'));
+
+      try {
+        const ids = coins.map(c => c.id).join(',');
+        const currCodes = currencies.map(c => c.code).join(',');
+
+        const [resUSD, resMulti] = await Promise.all([
+          fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`),
+          fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${stableIds.join(',')}&vs_currencies=${currCodes}`)
+        ]);
+
+        if (!resUSD.ok) throw new Error(`HTTP ${resUSD.status}`);
+        const data = await resUSD.json();
+
+        // Parse multi-currency stablecoin prices
+        let multiRaw = {};
+        if (resMulti.ok) multiRaw = await resMulti.json();
+
+        // Build fxRates from tether prices (tether ≈ 1 USD, so tether.inr ≈ USD/INR)
+        if (multiRaw.tether) {
+          fxRates = { ...multiRaw.tether };
+        }
+
+        const usdInr = fxRates['inr'] || 83.5;
+
+        // Build multi-currency data: { currCode: [{id, price}, ...] }
+        const multiData = {};
+        for (const cur of currencies) {
+          multiData[cur.code] = [];
+          for (const sid of stableIds) {
+            if (multiRaw[sid] && multiRaw[sid][cur.code] != null) {
+              multiData[cur.code].push({ id: sid, price: multiRaw[sid][cur.code] });
+            }
+          }
+        }
+
+        const stableData = [];
+        data.forEach(apiCoin => {
+          const coin = coins.find(c => c.id === apiCoin.id);
+          if (!coin) return;
+          const k = coin.symbol.toLowerCase();
+          const isStable = coin.section === 'stable';
+          if (isStable) stableData.push(apiCoin);
+
+          const priceEl = document.getElementById(`${k}-price`);
+          const priceText = fmt(apiCoin.current_price, isStable ? 4 : 2);
+          if (isStable) {
+            const pegEl = document.getElementById(`${k}-peg`);
+            const dev = Math.abs(apiCoin.current_price - coin.peg);
+            pegEl.textContent = dev < 0.005 ? 'ON PEG' : 'DEPEG';
+            pegEl.className = 'peg-status ' + (dev < 0.005 ? 'peg-ok' : 'peg-warn');
+            priceEl.innerHTML = priceText + pegEl.outerHTML;
+          } else {
+            priceEl.textContent = priceText;
+          }
+
+          const changeEl = document.getElementById(`${k}-change`);
+          const ch = apiCoin.price_change_percentage_24h || 0;
+          changeEl.textContent = (ch >= 0 ? '+' : '') + ch.toFixed(2) + '%';
+          changeEl.className = 'stat-value ' + (ch >= 0 ? 'change-positive' : 'change-negative');
+
+          document.getElementById(`${k}-mcap`).textContent = fmtCompact(apiCoin.market_cap);
+          const extra = isStable ? apiCoin.total_volume : apiCoin.high_24h;
+          document.getElementById(`${k}-extra`).textContent = isStable ? fmtCompact(extra) : fmt(extra);
+        });
+
+        updateArbitrage(stableData, usdInr);
+        updateMultiCurrency(multiData);
+
+        document.getElementById('status-dot').className = 'dot';
+        document.getElementById('status-text').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      } catch (err) {
+        document.getElementById('status-dot').className = 'dot error';
+        document.getElementById('status-text').textContent = 'Error: ' + err.message;
+      } finally {
+        document.querySelectorAll('.card').forEach(c => c.classList.remove('loading'));
+      }
+    }
+
+    buildCards();
+    buildCalcCurrencySelect();
+    fetchPrices();
+    setInterval(fetchPrices, 30000);
+  </script>
+</body>
+</html>
